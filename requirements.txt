@@ -1,4 +1,4 @@
-napari>=0.3.5
+napari[all]>=0.3.5
 torch
 torchvision
 matplotlib
