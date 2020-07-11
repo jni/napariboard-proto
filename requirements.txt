@@ -1,0 +1,8 @@
+napari>=0.3.5
+torch
+torchvision
+matplotlib
+numpy
+dask>=2.15
+jupyter
+scikit-image
