@@ -99,7 +99,6 @@ noisy_test_dask = da.map_blocks(
             chunks=((1,) * n, (28,), (28,)),
             dtype=np.float32,
         )
-#noisy_test = np.array(noisy_test_dask)
 noisy_test = noisy_test_dask
 
 clean_test_dask = da.map_blocks(
@@ -108,30 +107,23 @@ clean_test_dask = da.map_blocks(
             chunks=((1,) * n, (28,), (28,)),
             dtype=np.float32,
         )
-#clean_test = np.array(clean_test_dask)
 clean_test = clean_test_dask
 
 import torch
 
-@delayed
-def test_numpy_to_result_numpy(i):
+def test_numpy_to_result_numpy(dask_array):
     """Convert test NumPy array to model output and back to NumPy."""
     out = model(
-        torch.Tensor(np.array(noisy_test_dask[i:i+1, np.newaxis]))
-    ).detach().numpy().squeeze()
+        torch.Tensor(np.array(dask_array)[:, np.newaxis])
+    ).detach().numpy()[:, 0]
     return out
 
 # build the results dask array
-model_output_dask = da.stack(
-    [
-        da.from_delayed(
-            test_numpy_to_result_numpy(i),
-            shape=(28, 28),
-            dtype=np.float32
+model_output_dask = da.map_blocks(
+        test_numpy_to_result_numpy,
+        noisy_test_dask,
+        dtype=np.float32,
         )
-        for i in range(len(noisy_mnist_test))
-    ]
-)
 
 
 import napari
