@@ -78,43 +78,38 @@ optimizer = Adam(model.parameters(), lr=0.001)
 
 from dask import array as da, delayed
 
-@delayed
-def get_noisy_test_image(i):
+def get_noisy_test_image(arr, block_id):
+    j = block_id[0]
     return (
-        noisy_mnist_test[i][0].detach().numpy().reshape((28, 28))
-    )
-
-@delayed
-def get_clean_test_image(i):
-    return (
-        noisy_mnist_test[i][1].detach().numpy().reshape((28, 28))
+        noisy_mnist_test[j][0].detach().numpy().reshape((1, 28, 28))
     )
 
 
-noisy_test_dask = da.stack(
-    [
-        da.from_delayed(
-            get_noisy_test_image(i),
-            shape=(1, 28, 28),
-            dtype=np.float32
-        ).reshape((28, 28))
-        for i in range(len(noisy_mnist_test))
-    ]
-)
-noisy_test = np.array(noisy_test_dask)
+def get_clean_test_image(arr, block_id):
+    j = block_id[0]
+    return (
+        noisy_mnist_test[j][1].detach().numpy().reshape((1, 28, 28))
+    )
 
+n = len(noisy_mnist_test)
 
-clean_test_dask = da.stack(
-    [
-        da.from_delayed(
-            get_clean_test_image(i),
-            shape=(1, 28, 28),
-            dtype=np.float32
-        ).reshape((28, 28))
-        for i in range(len(noisy_mnist_test))
-    ]
-)
-clean_test = np.array(clean_test_dask)
+noisy_test_dask = da.map_blocks(
+            get_noisy_test_image,
+            np.arange(1),
+            chunks=((1,) * n, (28,), (28,)),
+            dtype=np.float32,
+        )
+#noisy_test = np.array(noisy_test_dask)
+noisy_test = noisy_test_dask
+
+clean_test_dask = da.map_blocks(
+            get_clean_test_image,
+            np.arange(1),
+            chunks=((1,) * n, (28,), (28,)),
+            dtype=np.float32,
+        )
+#clean_test = np.array(clean_test_dask)
+clean_test = clean_test_dask
 
 import torch
 
