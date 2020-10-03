@@ -175,7 +175,7 @@ with napari.gui_qt():
         loss_axes.set_ylim(
             np.min(new_y) * (-0.05), np.max(new_y) * (1.05)
         )
-        loss_canvas.draw()
+        loss_canvas.draw_idle()
 
 
     # and update the model output layer
