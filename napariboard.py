@@ -40,7 +40,7 @@ class SyntheticNoiseDataset(Dataset):
 
     def __getitem__(self, index):
         img = self.data[index][0]
-        return add_noise(img), img
+        return add_noise(img)
 
 
 noisy_mnist_train = SyntheticNoiseDataset(mnist_train, 'train')
@@ -85,14 +85,14 @@ from dask import array as da, delayed
 def get_noisy_test_image(arr, block_id):
     j = block_id[0]
     return (
-        noisy_mnist_test[j][0].detach().numpy().reshape((1, 28, 28))
+        noisy_mnist_test[j].detach().numpy().reshape((1, 28, 28))
     )
 
 
 def get_clean_test_image(arr, block_id):
     j = block_id[0]
     return (
-        noisy_mnist_test[j][1].detach().numpy().reshape((1, 28, 28))
+        mnist_test[j][0].detach().numpy().reshape((1, 28, 28))
     )
 
 n = len(noisy_mnist_test)
@@ -202,7 +202,7 @@ with napari.gui_qt():
     def train(model, data_loader, n_iter):
 
         for i, batch in zip(range(n_iter), data_loader):
-            noisy_images, clean_images = batch
+            noisy_images = batch
 
             net_input, mask = masker.mask(noisy_images, i)
             net_output = model(net_input)
