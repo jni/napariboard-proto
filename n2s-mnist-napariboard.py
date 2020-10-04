@@ -1,12 +1,13 @@
-
 import os
-
 
 import numpy as np
 
 from torchvision.datasets import MNIST
 from torchvision import transforms
 from torch.utils.data import Dataset
+
+# grab the data. This will create a data/ folder in your working directory the
+# first time it is run.
 
 mnist_train = MNIST(
     'data/MNIST',
@@ -22,11 +23,7 @@ mnist_test = MNIST(
     train = False
 )
 
-
-# Then we synthetically add high noise using `torch`:
-
-# In[4]:
-
+# synthetically add high noise subclassing a torch Dataset:
 
 from torch import randn
 
@@ -50,16 +47,17 @@ noisy_mnist_train = SyntheticNoiseDataset(mnist_train, 'train')
 noisy_mnist_test = SyntheticNoiseDataset(mnist_test, 'test')
 
 
-noisy, clean = noisy_mnist_train[0]
-
-
+# instantiate the masker. See the Noise2Self paper for a description.
 
 from mask import Masker
 masker = Masker(width=4, mode='interpolate')
 
+# instantiate the model. This could be any image-to-image model!
+
 from models.babyunet import BabyUnet
 model = BabyUnet()
 
+# instantiate the loss and the optimizer.
 
 from torch.nn import MSELoss
 from torch.optim import Adam
@@ -69,11 +67,17 @@ loss_function = MSELoss()
 optimizer = Adam(model.parameters(), lr=0.001)
 
 
-# We lazily convert the torch tensors to NumPy arrays and concatenate them into dask arrays containing all the data. We do this for the training (noisy) data, the ground truth, and the model output.
-#
-# There's a bit of reshaping because torch data comes with extra dimensions that we want to squeeze out, to only get a `(nsamples, size_y, size_x)` volume.
-#
-# Finally, because of a [performance issue with `dask.array.stack`](https://github.com/dask/dask/issues/5913), we convert the input data to a non-lazy numpy array for the moment.
+# We lazily convert the torch tensors to NumPy arrays and concatenate them into
+# dask arrays containing all the data. We do this for the training (noisy)
+# data, the ground truth, and the model output.
+# 
+# There's a bit of reshaping because torch data comes with extra dimensions
+# that we want to squeeze out, to only get a `(nsamples, size_y, size_x)`
+# volume.
+# 
+# Finally, because of a [performance issue with
+# `dask.array.stack`](https://github.com/dask/dask/issues/5913), we use
+# `dask.array.map_blocks` to do our stacking.
 
 
 from dask import array as da, delayed
@@ -118,7 +122,8 @@ def test_numpy_to_result_numpy(dask_array):
     ).detach().numpy()[:, 0]
     return out
 
-# build the results dask array
+# build the results dask array. No need to specify chunks here since they are
+# the same as the input array.
 model_output_dask = da.map_blocks(
         test_numpy_to_result_numpy,
         noisy_test_dask,
@@ -126,10 +131,11 @@ model_output_dask = da.map_blocks(
         )
 
 
+# set the dask cache size to 0 because we want the output to be recomputed each
+# time we call it, since the tensor model is training and will have changed.
 import napari
 from napari.utils import resize_dask_cache
 resize_dask_cache(0)
-
 
 with napari.gui_qt():
     viewer = napari.Viewer()
@@ -141,13 +147,11 @@ with napari.gui_qt():
     )  # this layer though, we're gonna play with
     viewer.grid_view()
 
-
     import matplotlib.pyplot as plt
     from matplotlib.backends.backend_qt5agg import FigureCanvas
     from matplotlib.figure import Figure
 
     NUM_ITER = 500
-
 
     # build the plot, but don't display it yet
     # — we'll add it to the napari viewer later
@@ -161,10 +165,10 @@ with napari.gui_qt():
         loss_canvas.figure.tight_layout()
         loss_line = lines[0]
 
-
-    # Napari's threading utilities, created by Talley Lambert, allow *yielding* of values during a thread's execution, and connecting those yielded values to callbacks. Below, we create callbacks to update the loss plot and the displayed model output:
-
-
+    # Napari's threading utilities, created by Talley Lambert, allow *yielding*
+    # of values during a thread's execution, and connecting those yielded
+    # values to callbacks. Below, we create callbacks to update the loss plot
+    # and the displayed model output:
 
     # when getting a new loss, update the plot
     def update_plot(loss):
@@ -192,7 +196,6 @@ with napari.gui_qt():
 
     from napari.qt import thread_worker
 
-
     # define a function to train the model in a new thread,
     # connecting the yielded loss values to our update functions
     @thread_worker(connect={'yielded': [update_viewer, update_plot]})
@@ -205,25 +208,19 @@ with napari.gui_qt():
             net_output = model(net_input)
 
             loss = loss_function(net_output*mask, noisy_images*mask)
-
             optimizer.zero_grad()
-
             loss.backward()
-
             optimizer.step()
 
             yield round(loss.item(), 4)
 
 
-    # Finally, we create the PyTorch DataLoader, add the loss plot to our viewer, and start training! You should be able to see the model output refine over time, while simultaneously browsing through the whole test dataset.
+    # Finally, we create the PyTorch DataLoader, add the loss plot to our
+    # viewer, and start training! You should be able to see the model output
+    # refine over time, while simultaneously browsing through the whole test
+    # dataset
 
-    # In[ ]:
-
-
-    # finally, add the plot to the viewer, and start training!
     data_loader = DataLoader(noisy_mnist_train, batch_size=32, shuffle=True)
 
     viewer.window.add_dock_widget(loss_canvas)
     worker = train(model, data_loader, NUM_ITER)
-
-
