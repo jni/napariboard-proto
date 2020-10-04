@@ -135,7 +135,9 @@ resize_dask_cache(0)
 
 with napari.gui_qt():
     viewer = napari.Viewer()
-    _ = viewer.add_image(clean_test)  # returns layer, we don't care
+    # uncomment the line below if you want to see the ground truth,
+    # which is not actually used by the model.
+    # _ = viewer.add_image(clean_test)  # returns layer, we don't care
     _ = viewer.add_image(noisy_test)  # returns layer, we don't care
     model_layer = viewer.add_image(
         model_output_dask,
