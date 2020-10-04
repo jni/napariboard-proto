@@ -69,7 +69,8 @@ optimizer = Adam(model.parameters(), lr=0.001)
 
 # We lazily convert the torch tensors to NumPy arrays and concatenate them into
 # dask arrays containing all the data. We do this for the training (noisy)
-# data, the ground truth, and the model output.
+# data, the ground truth (reference only, not used by this model!), and the
+# model output.
 # 
 # There's a bit of reshaping because torch data comes with extra dimensions
 # that we want to squeeze out, to only get a `(nsamples, size_y, size_x)`
@@ -80,43 +81,38 @@ optimizer = Adam(model.parameters(), lr=0.001)
 # `dask.array.map_blocks` to do our stacking.
 
 
-from dask import array as da, delayed
+from dask import array as da
 
-def get_noisy_test_image(arr, block_id):
+def dataset2numpy(torchdataset, block_id):
+    # j is the batch id
     j = block_id[0]
     return (
-        noisy_mnist_test[j][0].detach().numpy().reshape((1, 28, 28))
-    )
-
-
-def get_clean_test_image(arr, block_id):
-    j = block_id[0]
-    return (
-        noisy_mnist_test[j][1].detach().numpy().reshape((1, 28, 28))
+        torchdataset[j][0].detach().numpy().reshape((1, 28, 28))
     )
 
 n = len(noisy_mnist_test)
 
-noisy_test_dask = da.map_blocks(
-            get_noisy_test_image,
-            np.arange(1),
+noisy_test = da.map_blocks(
+            dataset2numpy,
+            noisy_mnist_test,
             chunks=((1,) * n, (28,), (28,)),
             dtype=np.float32,
         )
-noisy_test = noisy_test_dask
 
-clean_test_dask = da.map_blocks(
-            get_clean_test_image,
-            np.arange(1),
+clean_test = da.map_blocks(
+            dataset2numpy,
+            mnist_test,
             chunks=((1,) * n, (28,), (28,)),
             dtype=np.float32,
         )
-clean_test = clean_test_dask
 
 import torch
 
 def test_numpy_to_result_numpy(dask_array):
     """Convert test NumPy array to model output and back to NumPy."""
+    # we convert the dask array (will be a single block) to a numpy array, add
+    # a new batch axis, create a torch Tensor, run it through the model, detach
+    # it, bring it back to NumPy, and remove the batch axis we added.
     out = model(
         torch.Tensor(np.array(dask_array)[:, np.newaxis])
     ).detach().numpy()[:, 0]
@@ -125,9 +121,9 @@ def test_numpy_to_result_numpy(dask_array):
 # build the results dask array. No need to specify chunks here since they are
 # the same as the input array.
 model_output_dask = da.map_blocks(
-        test_numpy_to_result_numpy,
-        noisy_test_dask,
-        dtype=np.float32,
+            test_numpy_to_result_numpy,
+            noisy_test,
+            dtype=np.float32,
         )
 
 
