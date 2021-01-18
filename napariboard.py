@@ -143,7 +143,7 @@ with napari.gui_qt():
         model_output_dask,
         colormap='magma',
     )  # this layer though, we're gonna play with
-    viewer.grid_view()
+    viewer.grid.enabled = True
 
     import matplotlib.pyplot as plt
     from matplotlib.backends.backend_qt5agg import FigureCanvas
