@@ -71,11 +71,11 @@ optimizer = Adam(model.parameters(), lr=0.001)
 # dask arrays containing all the data. We do this for the training (noisy)
 # data, the ground truth (reference only, not used by this model!), and the
 # model output.
-# 
+#
 # There's a bit of reshaping because torch data comes with extra dimensions
 # that we want to squeeze out, to only get a `(nsamples, size_y, size_x)`
 # volume.
-# 
+#
 # Finally, because of a [performance issue with
 # `dask.array.stack`](https://github.com/dask/dask/issues/5913), we use
 # `dask.array.map_blocks` to do our stacking.
